@@ -34,4 +34,13 @@ describe('Machine', () => {
     );
     expect(res).toEqual(`github:electricimp/Builder/spec/fixtures/lib#path.builder@1\n`);
   });
+
+  it('should handle include-once corectly #3', () => {
+    machine.suppressDupWarning = false;
+    const res = eol.lf(machine.execute(
+      `@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder"
+@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder_copy"`
+    ));
+    expect(res).toEqual(`a.builder\n`);
+  });
 });

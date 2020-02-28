@@ -44,8 +44,8 @@ describe('Machine', () => {
 
       machine.suppressDupWarning = false;
       const res = eol.lf(machine.execute(
-        `@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder"
-@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder_copy"`
+        `@include "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder"
+@include "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder_copy"`
       ));
       expect(res).toEqual(`a.builder\na.builder\n`);
     } catch (e) {
@@ -64,8 +64,8 @@ describe('Machine', () => {
       });
 
       const res = eol.lf(machine.execute(
-        `@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder"
-@include once "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder_copy"`
+        `@include "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder"
+@include "${backslashToSlash(__dirname)}/../fixtures/lib/a.builder_copy"`
       ));
       expect(res).toEqual(`a.builder\na.builder\n`);
     } catch (e) {

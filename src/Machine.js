@@ -174,7 +174,7 @@ class Machine {
   _formatPath(filepath, filename) {
     return path.normalize(path.join(filepath, filename));
   }
-  
+
   /**
    * Execute AST
    * @param {[]} ast
@@ -374,9 +374,17 @@ class Machine {
     // read
     const res = this.fileCache.read(reader, includePath, this.dependencies);
 
+    const md5sum = md5(res.content);
+
+    // if once flag is set, then check if source has already been included
+    if (once && this._includedSourcesHashes.has(md5sum)) {
+      this._includedSources.add(includePath)  // Prevent fetches in the future for the same path
+      this.logger.debug(`Skipping source "${includePath}" - contents have already been included previously`);
+      return;
+    }
+
     // Check if source with same hash value has already been included
     if (!this.suppressDupWarning) {
-      const md5sum = md5(res.content);
       if (this._includedSourcesHashes.has(md5sum)) {
         const path = this._includedSourcesHashes.get(md5sum).path;
         const file = this._includedSourcesHashes.get(md5sum).file;
@@ -963,4 +971,3 @@ class Machine {
 module.exports = Machine;
 module.exports.INSTRUCTIONS = INSTRUCTIONS;
 module.exports.Errors = Errors;
-
