@@ -7,6 +7,7 @@
 require('jasmine-expect');
 
 const init = require('./init')('main');
+const path = require('path');
 const Machine = require('../../src/Machine');
 const fs = require('fs');
 
@@ -157,6 +158,40 @@ describe('FileCache', () => {
       expect(linksSet.has(path)).toEqual(false);
       linksSet.add(path);
     });
+  });
+
+  it('should cache files or read from cache if save-dependencies or use-dependencies options are on and dependencies do not include the file', () => {
+    const dependenciesFile = path.join(process.cwd(), 'test-dependencies.json');
+    const link1 = 'github:nobitlost/Builder/spec/fixtures/sample-1/input.nut.out';
+    const link2 = 'github:nobitlost/Builder/spec/fixtures/sample-1/input.nut.json';
+    machine.clearCache();
+    machine.useCache = true;
+    machine.dependenciesSaveFile = dependenciesFile;
+
+    machine.execute(
+      `@include "${link1}"
+@include "${link2}"`
+    );
+
+    let ghRes = machine.fileCache._getCachedPath(link2);
+    expect(fs.existsSync(ghRes)).toEqual(true);
+    machine.clearCache();
+
+    machine.execute(`@include "${link1}"`);
+    machine.clearCache();
+
+    machine.dependenciesSaveFile = undefined;
+    machine.dependenciesUseFile = dependenciesFile;
+
+    machine.execute(
+      `@include "${link1}"
+@include "${link2}"`
+    );
+
+    ghRes = machine.fileCache._getCachedPath(link2);
+    expect(fs.existsSync(ghRes)).toEqual(true);
+
+    fs.unlinkSync(dependenciesFile);
   });
 
 });
