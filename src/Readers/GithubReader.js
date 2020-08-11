@@ -25,8 +25,8 @@
 'use strict';
 
 const HttpsProxyAgent = require('https-proxy-agent');
-const path = require('path');
-const Octokit = require('@octokit/rest');
+const upath = require('upath');
+const { Octokit } = require('@octokit/rest');
 const childProcess = require('child_process');
 const packageJson = require('../../package.json');
 const AbstractReader = require('./AbstractReader');
@@ -140,8 +140,8 @@ class GithubReader extends AbstractReader {
   parsePath(source) {
     const parsed = GithubReader.parseUrl(source);
     return {
-      __FILE__: path.basename(parsed.path),
-      __PATH__: `github:${parsed.owner}/${parsed.repo}/${path.dirname(parsed.path)}`,
+      __FILE__: upath.basename(parsed.path),
+      __PATH__: `github:${parsed.owner}/${parsed.repo}/${upath.dirname(parsed.path)}`,
       __REPO_REF__: parsed.ref,
       __REPO_PREFIX__: `github:${parsed.owner}/${parsed.repo}`
     };
@@ -198,10 +198,13 @@ class GithubReader extends AbstractReader {
 
     const octokit = new Octokit(octokitConfig);
 
+    const parsedUrl = this.parseUrl(source);
+    parsedUrl.path = upath.normalize(parsedUrl.path);
+
     if (gitBlobID !== 'undefined') {
       const args = {
-        owner: this.parseUrl(source).owner,
-        repo: this.parseUrl(source).repo,
+        owner: parsedUrl.owner,
+        repo: parsedUrl.repo,
         file_sha: gitBlobID,
       };
 
@@ -220,7 +223,7 @@ class GithubReader extends AbstractReader {
     }
 
     // @see https://developer.github.com/v3/repos/contents/#get-contents
-    octokit.repos.getContents(this.parseUrl(source))
+    octokit.repos.getContents(parsedUrl)
       .then((res) => {
         const ret = {
           data: Buffer.from(res.data.content, 'base64').toString(),
