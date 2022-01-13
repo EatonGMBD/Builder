@@ -8,6 +8,7 @@ require('jasmine-expect');
 
 const Fixture = require('fixture-stdout');
 const stderrFixture = new Fixture({ stream: process.stderr });
+const stdoutFixture = new Fixture({ stream: process.stdout });
 const init = require('./init')('main');
 const Machine = require('../../src/Machine');
 const path = require('path');
@@ -104,6 +105,32 @@ describe('Machine', () => {
           fail(e);
         }
         // Returning false prevents message actually being logged to STDERR
+        return false;
+      });
+
+      machine.execute(`@warning "${text}"`);
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+  it('should handle @info directives', (done) => {
+    // Our info message
+    const text = 'abc';
+    // What we expect to be logged to STDOUT
+    const blueTextLine = `\x1b[34m${text}\u001b[34m\n`;
+    try {
+      // Capture STDOUT messages
+      stdoutFixture.capture(message => {
+        try {
+          expect(message).toBe(yellowTextLine);
+          // Release STDOUT
+          stdoutFixture.release();
+          done();
+        } catch (e) {
+          fail(e);
+        }
+        // Returning false prevents message actually being logged to STDOUT
         return false;
       });
 

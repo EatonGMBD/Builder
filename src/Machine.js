@@ -589,7 +589,7 @@ class Machine {
       const message = this.expression.evaluate(instruction.value,
         context
       );
-      console.log("\x1b[33m" + message + '\u001b[39m');
+      console.log("\x1b[34m" + message + '\u001b[34m');
     }
 
   /**
