@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2016-2019 Electric Imp
+// Copyright 2016-2020 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -25,8 +25,8 @@
 'use strict';
 
 const HttpsProxyAgent = require('https-proxy-agent');
-const path = require('path');
-const Octokit = require('@octokit/rest');
+const upath = require('upath');
+const { Octokit } = require('@octokit/rest');
 const childProcess = require('child_process');
 const packageJson = require('../../package.json');
 const AbstractReader = require('./AbstractReader');
@@ -66,7 +66,7 @@ class GithubReader extends AbstractReader {
 
     // process dependencies
     if (options && options.dependencies && options.dependencies.has(source)) {
-      this.gitBlobID = options.dependencies.get(source);
+      var gitBlobID = options.dependencies.get(source);
     }
 
     // spawn child process
@@ -77,7 +77,7 @@ class GithubReader extends AbstractReader {
         source,
         this.username,
         this.token,
-        this.gitBlobID,
+        gitBlobID,
       ],
       { timeout: this.timeout }
     );
@@ -140,9 +140,10 @@ class GithubReader extends AbstractReader {
   parsePath(source) {
     const parsed = GithubReader.parseUrl(source);
     return {
-      __FILE__: path.basename(parsed.path),
-      __PATH__: `github:${parsed.owner}/${parsed.repo}/${path.dirname(parsed.path)}`,
-      __REF__: parsed.ref
+      __FILE__: upath.basename(parsed.path),
+      __PATH__: `github:${parsed.owner}/${parsed.repo}/${upath.dirname(parsed.path)}`,
+      __REPO_REF__: parsed.ref,
+      __REPO_PREFIX__: `github:${parsed.owner}/${parsed.repo}`
     };
   }
 
@@ -177,28 +178,33 @@ class GithubReader extends AbstractReader {
       agent = HttpsProxyAgent(process.env.https_proxy);
     }
 
-    const octokit = new Octokit({
+    const octokitConfig = {
       userAgent: packageJson.name + '/' + packageJson.version,
       baseUrl: 'https://api.github.com',
       request: {
         agent: agent,
         timeout: 5000
-      },
-    });
+      }
+    };
 
     // authorization
     if (username != '' && password !== '') {
-      octokit.authenticate({
+      octokitConfig.auth = {
         type: 'basic',
         username,
         password
-      });
+      };
     }
+
+    const octokit = new Octokit(octokitConfig);
+
+    const parsedUrl = this.parseUrl(source);
+    parsedUrl.path = upath.normalize(parsedUrl.path);
 
     if (gitBlobID !== 'undefined') {
       const args = {
-        owner: this.parseUrl(source).owner,
-        repo: this.parseUrl(source).repo,
+        owner: parsedUrl.owner,
+        repo: parsedUrl.repo,
         file_sha: gitBlobID,
       };
 
@@ -217,7 +223,7 @@ class GithubReader extends AbstractReader {
     }
 
     // @see https://developer.github.com/v3/repos/contents/#get-contents
-    octokit.repos.getContents(this.parseUrl(source))
+    octokit.repos.getContents(parsedUrl)
       .then((res) => {
         const ret = {
           data: Buffer.from(res.data.content, 'base64').toString(),
@@ -235,6 +241,8 @@ class GithubReader extends AbstractReader {
    */
   static parseUrl(source) {
     // parse url
+    // The @ character must not be present in the name of the file
+    // which is being included from repository, in order to parse branch/tag/commit correctly
     const m = source.match(
       /^(github:|github\.com:|github\.com\/)([a-z0-9\-\._]+)\/([a-z0-9\-\._]+)\/(.*?)(?:@([^@]*))?$/i
     );

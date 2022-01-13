@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2016-2019 Electric Imp
+// Copyright 2016-2020 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -71,7 +71,7 @@ class Machine {
 
   constructor() {
     this.file = 'main'; // default source filename
-    this.path = ''; // default source path
+    this.path = upath.resolve('.'); // default source path
     this.readers = {};
     this.globals = {};
     this.fileCache = new FileCache(this);
@@ -174,7 +174,7 @@ class Machine {
   _formatPath(filepath, filename) {
     return path.normalize(path.join(filepath, filename));
   }
-  
+
   /**
    * Execute AST
    * @param {[]} ast
@@ -285,29 +285,31 @@ class Machine {
   }
 
   /**
-   * Concatenate github URL prefix and local relative include
+   * Concatenate github/bitbucket/azure/git-local URL prefix and local relative include
    * @param {string[]} prefix
    * @param {string[]} includePath
    * @private
    */
   _formatURL(prefix, includePath) {
-
-    const URL = url.parse(prefix);
-    if (!URL.protocol) {
+    if (!prefix) {
       return undefined;
     }
 
-    const res = prefix.match(/(github:)(.*)/);
+    const res = prefix.match(/^(github:)(.*)/) ||
+                prefix.match(/^(bitbucket-server:)(.*)/) ||
+                prefix.match(/^(git-azure-repos:)(.*)/) ||
+                prefix.match(/^(git-local:)(.*)/);
+
     if (res === null) {
       return undefined;
     }
 
     const suffix = upath.normalize(upath.join(res[2], includePath));
-    return `${res[1]}${suffix}`.replace(/\\/g, '/');
+    return `${res[1]}${suffix}`;
   }
 
   /**
-   * Replace local includes to github URLs if requested
+   * Replace local includes to github/bitbucket/azure/git-local/weblink URLs if requested
    * @param {string} includePath
    * @param {{}} context
    * @private
@@ -318,25 +320,52 @@ class Machine {
       return includePath;
     }
 
-    /*
-     * The logic below could be moved to the _getReader()
-     * function and implemented for every reader type independently.
-     */
+    // Consider cases when includePath starts with "/"
+    if (this._isUnixAbsolutePath(includePath)) {
+      if (context.__REPO_PREFIX__) {
+        // If the include path is absolute (in unix way, i.e. starts from '/') and is
+        // included from repository file, we can consider it relatively to the repo root
+        const relativePath = this._formatURL(context.__REPO_PREFIX__, includePath);
+        // Adding ref to the path if the ref exists
+        return this._addRefToPath(relativePath, context);
+      } else if (context.__URL_ROOT__) {
+        // If the include path is absolute in unix way and is included from
+        // weblink, we can consider it relatively to the URL root
+        return url.resolve(context.__URL_ROOT__, includePath);
+      }
+    }
 
-    // check if the file is included locally
-    if (this._getReader(includePath) !== this.readers.file) {
+    const targetReader = this._getReader(includePath);
+
+    if (path.isAbsolute(includePath) || targetReader === this.readers.http) {
+      // If this is an absolute local path or a web link, don't do anything with it
       return includePath;
     }
 
-    // check that path is not absolute
-    if (path.isAbsolute(includePath)) {
+    // If the include path is a repository absolute path and refers to the repo it was included from and doesn't have a ref
+    // specified, we add the ref specified for the previous include (the path to the file where the current include was taken from)
+    // Otherwise, we just return the include path back if it is a repository absolute path
+    if (this._isRepositoryInclude(includePath)) {
+      const parsedPath = targetReader.parsePath(includePath);
+
+      if (parsedPath.__REPO_PREFIX__ == context.__REPO_PREFIX__ && !parsedPath.__REPO_REF__) {
+        return this._addRefToPath(includePath, context);
+      }
+
+      // Absolute github/bitbucket/azure/git-local include
       return includePath;
     }
 
-    // check if file is included from github source
+    // Check if the parent file is included from repository source - if so, consider includePath relative to the repo root
     const remotePath = this._formatURL(context.__PATH__, includePath);
-    if (remotePath && this._getReader(remotePath) === this.readers.github) {
-      return context.__REF__ ? `${remotePath}@${context.__REF__}` : remotePath;
+    if (remotePath && this._isRepositoryInclude(remotePath)) {
+      return this._addRefToPath(remotePath, context);
+    }
+
+    // Check if the parent file is included from a web link - if so, consider includePath relative to the URL root
+    if (context.__URL_ROOT__) {
+      const pathToFile = upath.join(upath.dirname(context.__URL_PATH__), includePath);
+      return url.resolve(context.__URL_ROOT__, pathToFile);
     }
 
     return includePath;
@@ -352,6 +381,8 @@ class Machine {
    * @private
    */
   _includeSource(source, context, buffer, once, evaluated) {
+    // replace all \ with / because otherwise readers will not read the source
+    source = source.replace(/\\/g, '/');
 
     // path is an expression, evaluate it
     let includePath = evaluated ? source : this.expression.evaluate(
@@ -359,46 +390,60 @@ class Machine {
       context,
     ).trim();
 
-    // if once flag is set, then check if source has already been included
-    if (once && this._includedSources.has(includePath)) {
-      this.logger.debug(`Skipping source "${includePath}": has already been included`);
-      return;
+    // checkout local includes in the remote sources (github/bitbucket/azure/git-local/weblink)
+    includePath = this._remoteRelativeIncludes(includePath, context);
+    // if included path starts from '/' and is being included from Windows system,
+    // we join the root of the current volume (such as C:/, D:/ and so on) to the
+    // included path
+    if (this._isUnixAbsolutePath(includePath) && process.platform === "win32") {
+      const root = path.parse(this._path).root;
+      includePath = upath.join(root, includePath);
     }
 
-    // checkout local includes in the github sources from github
-    includePath = this._remoteRelativeIncludes(includePath, context);
+    // if once flag is set, then check if source has already been included (and avoid the read below if avoidable)
+    if (once && this._includedSources.has(includePath)) {
+      this.logger.debug(`Skipping source "${includePath}" - path has already been included previously`);
+      return;
+    }
 
     const reader = this._getReader(includePath);
     this.logger.info(`Including source "${includePath}"`);
 
     // read
-    const res = this.fileCache.read(reader, includePath, this.dependencies);
+    const res = this.fileCache.read(reader, includePath, this.dependencies, context);
+
+    // calculate md5 hash
+    const md5sum = md5(res.content);
+
+    // if once flag is set, then check if source has already been included
+    if (once && this._includedSourcesHashes.has(md5sum)) {
+      this._includedSources.add(includePath)  // Prevent fetches in the future for the same path
+      this.logger.debug(`Skipping source "${includePath}" - contents have already been included previously`);
+      return;
+    }
 
     // Check if source with same hash value has already been included
-    if (!this.suppressDupWarning) {
-      const md5sum = md5(res.content);
-      if (this._includedSourcesHashes.has(md5sum)) {
-        const path = this._includedSourcesHashes.get(md5sum).path;
-        const file = this._includedSourcesHashes.get(md5sum).file;
-        const line = this._includedSourcesHashes.get(md5sum).line;
-        const dupPath = includePath;
-        const dupFile = context.__FILE__;
-        const dupLine = context.__LINE__;
-        const message = `Warning: duplicated includes detected! The same exact file content is included from
+    if (!this.suppressDupWarning && this._includedSourcesHashes.has(md5sum)) {
+      const path = this._includedSourcesHashes.get(md5sum).path;
+      const file = this._includedSourcesHashes.get(md5sum).file;
+      const line = this._includedSourcesHashes.get(md5sum).line;
+      const dupPath = includePath;
+      const dupFile = context.__FILE__;
+      const dupLine = context.__LINE__;
+      const message = `Warning: duplicated includes detected! The same exact file content is included from
     ${file}:${line} (${path})
     ${dupFile}:${dupLine} (${dupPath})`;
 
-        console.error("\x1b[33m" + message + '\u001b[39m');
-      }
-
-      const info = {
-        path: includePath,
-        file: context.__FILE__,
-        line: context.__LINE__,
-      };
-
-      this._includedSourcesHashes.set(md5sum, info);
+      console.error("\x1b[33m" + message + '\u001b[39m');
     }
+
+    const info = {
+      path: includePath,
+      file: context.__FILE__,
+      line: context.__LINE__,
+    };
+
+    this._includedSourcesHashes.set(md5sum, info);
 
     // provide filename for correct error messages
     this.parser.file = res.includePathParsed.__FILE__;
@@ -407,8 +452,6 @@ class Machine {
     const ast = this.parser.parse(res.content);
 
     // update context
-
-    // __FILE__/__PATH__
     context = merge(
       context,
       res.includePathParsed
@@ -712,6 +755,43 @@ class Machine {
     throw new Error(`Source "${source}" is not supported`);
   }
 
+  /**
+   * Check if path is unix absolute path
+   *
+   * @param {string} source
+   * @return {boolean}
+   * @private
+   */
+  _isUnixAbsolutePath(source) {
+    return source.length ? (source[0] === '/') : false;
+  }
+
+  /**
+   * Check if included from repository
+   *
+   * @param {*} source
+   * @return {boolean}
+   * @private
+   */
+  _isRepositoryInclude(source) {
+    const reader = this._getReader(source);
+    return reader === this.readers.github ||
+           reader === this.readers.bitbucketSrv ||
+           reader === this.readers.azureRepos ||
+           reader === this.readers.gitLocal;
+  }
+
+  /**
+   * Concatenates path with repo ref if needed
+   *
+   * @param {string} includePath
+   * @param {{}} context
+   * @return {string}
+   * @private
+   */
+  _addRefToPath(includePath, context) {
+    return (context.__REPO_REF__ && includePath.indexOf("@") == -1) ? `${includePath}@${context.__REPO_REF__}` : includePath;
+  }
 
   /**
    * Trim last buffer line
@@ -963,4 +1043,3 @@ class Machine {
 module.exports = Machine;
 module.exports.INSTRUCTIONS = INSTRUCTIONS;
 module.exports.Errors = Errors;
-

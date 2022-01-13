@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright 2016-2017 Electric Imp
+// Copyright 2016-2020 Electric Imp
 //
 // SPDX-License-Identifier: MIT
 //
@@ -33,6 +33,9 @@ const Expression = require('./Expression');
 const FileReader = require('./Readers/FileReader');
 const HttpReader = require('./Readers/HttpReader');
 const GithubReader = require('./Readers/GithubReader');
+const BitbucketServerReader = require('./Readers/BitbucketServerReader');
+const AzureReposReader = require('./Readers/AzureReposReader');
+const GitLocalReader = require('./Readers/GitLocalReader');
 
 /**
  * Main Builder class
@@ -109,11 +112,17 @@ class Builder {
     const fileReader = new FileReader();
     const httpReader = new HttpReader();
     const githubReader = new GithubReader();
+    const bitbucketServerReader = new BitbucketServerReader();
+    const azureReposReader = new AzureReposReader();
+    const gitLocalReader = new GitLocalReader();
 
     const parser = new AstParser();
     const machine = new Machine();
     const expression = new Expression(machine);
 
+    machine.readers.bitbucketSrv = bitbucketServerReader;
+    machine.readers.azureRepos = azureReposReader;
+    machine.readers.gitLocal = gitLocalReader;
     machine.readers.github = githubReader;
     machine.readers.http = httpReader;
     machine.readers.file = fileReader;

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Electric Imp
+// Copyright (c) 2016-2020 Electric Imp
 // This file is licensed under the MIT License
 // http://opensource.org/licenses/MIT
 
@@ -9,6 +9,10 @@ const init = require('./init')('main');
 const Machine = require('../../src/Machine');
 
 const backslashToSlash = require('../backslashToSlash');
+const path = require('path');
+
+const contextPath = path.resolve(__dirname, './../..');
+const filePath = path.join(contextPath, 'main');
 
 describe('Machine', () => {
   let machine;
@@ -31,7 +35,12 @@ describe('Machine', () => {
       fail();
     } catch (e) {
       expect(e instanceof Machine.Errors.ExpressionEvaluationError).toBe(true);
-      expect(e.message).toBe('Wrong number of arguments for include() (main:2)');
+      expect(e.message).toBe('Wrong number of arguments for include() (' + filePath + ':2)');
     }
+  });
+
+  it('should add more paths for local include file searching', () => {
+    const res = machine.execute(`@include once "${backslashToSlash(__dirname)}/../fixtures/sample-10/inc-c.nut"`);
+    expect(res.replace('\r\n','\n')).toEqual('// included file d\n');
   });
 });
