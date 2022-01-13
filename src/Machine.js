@@ -41,6 +41,7 @@ const INSTRUCTIONS = {
   LOOP: 'loop',
   ERROR: 'error',
   WARNING: 'warning',
+  INFO: 'info',
   MACRO: 'macro',
   OUTPUT: 'output',
   INCLUDE: 'include',
@@ -229,6 +230,10 @@ class Machine {
 
           case INSTRUCTIONS.WARNING:
             this._executeWarning(instruction, context, buffer);
+            break;
+
+          case INSTRUCTIONS.INFO:
+            this._executeInfo(instruction, context, buffer);
             break;
 
           case INSTRUCTIONS.MACRO:
@@ -572,6 +577,20 @@ class Machine {
     );
     console.error("\x1b[33m" + message + '\u001b[39m');
   }
+
+  /**
+   * Execute "info" instruction
+   * @param {{type, value}} instruction
+   * @param {{}} context
+   * @param {string[]} buffer
+   * @private
+   */
+     _executeInfo(instruction, context, buffer) {
+      const message = this.expression.evaluate(instruction.value,
+        context
+      );
+      console.log("\x1b[33m" + message + '\u001b[39m');
+    }
 
   /**
    * Execute "conditional" instruction

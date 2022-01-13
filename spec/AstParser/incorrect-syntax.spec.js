@@ -95,6 +95,15 @@ describe('Tokenizer', () => {
     }
   });
 
+  it('should detect incorrect @info syntax', () => {
+    try {
+      parser.parse(`@info`);
+      fail();
+    } catch (e) {
+      expect(e.message).toBe('Syntax error in @info (main:1)');
+    }
+  });
+
   it('should detect incorrect @else syntax', () => {
     try {
       parser.parse(`@if 1\n@else 0\n@endif`);

@@ -37,6 +37,7 @@
         - [@if... @elseif... @else](#if-elif-else)
         - [@error](#error)
         - [@warning](#warning)
+        - [@info](#info)
     - [Filters](#filters)
 - [Include Files](#include-files)
     - [Searching The Included File](#searching-the-included-file)
@@ -275,18 +276,18 @@ Builder provides the following pre-defined variables:
 - `__PATH__` &mdash; The absolute path (not including file name) to the file where this variable appears. Can contain a URL for remote includes. For example:
 
     `Hi from file @{__PATH__}!`
-    
+
 -  `__REPO_PREFIX__` &mdash; The root of the repository resource which is being processed. Is an internal variable of Builder. For example:
 
     `github:electricimp/Builder`
-    
+
 -  `__REPO_REF__` &mdash; The git reference (branch name or tag) of the repository resource which is being processed. Is an internal variable of Builder.
 
 -  `__URL_ROOT__` &mdash; The root of the remote weblink resource which is being processed. Is an internal variable of Builder. For example:
 <pre>
     https://example.com
     http://example.com:8080</pre>
-    
+
 -  `__URL_PATH__` &mdash; The path to the file on the remote weblink resource which is being processed, relative to the root of resource. Is an internal variable of Builder.
 
 <a id="loopvars"></a>
@@ -705,6 +706,29 @@ This directive simply emits a warning.
 @endif
 ```
 
+### @info ###
+
+This directive simply emits a log.
+
+<pre>
+<b>@info</b> <i>&lt;message:expression&gt;</i>
+</pre>
+
+#### Example ####
+
+```
+@if PLATFORM == "platform1"
+    // platform 1 code
+@elseif PLATFORM == "platform2"
+    // platform 2 code
+@elseif PLATFORM == "platform3"
+    // platform 3 code
+@else
+    @info "Building for default platform"
+    // default platform code
+@endif
+```
+
 ## Filters ##
 
 The filter operator, `|`, allows you to pass a value through any of the supported [functions](#builder-functions).
@@ -789,8 +813,8 @@ If the path in the include is an absolute path to the local file, it is consider
 
 If
 
-- the first symbol of the path in the include is "**/**" 
-- and the processed file is a remote file (ie. the file on a remote resource) 
+- the first symbol of the path in the include is "**/**"
+- and the processed file is a remote file (ie. the file on a remote resource)
 - and the `--use-remote-relative-includes` option is specified
 
 then the final path to the include file is a concatenation of the root of remote resource and the path in the include. If the file is not found there, *Builder* reports an error. See the [Remote Include Files](#remote-include-files) section for the root definition of the supported remote resources.
@@ -818,8 +842,8 @@ The final path to the include: "github:someuser/somerepo/folderC/anotherfile.nut
 
 If
 
-- the path in the include is a relative path 
-- and the processed file is a remote file (ie. the file on a remote resource) 
+- the path in the include is a relative path
+- and the processed file is a remote file (ie. the file on a remote resource)
 - and the `--use-remote-relative-includes` option is specified
 
 then the final path to the include file is a concatenation of the path to the processed file and the path in the include. If the file is not found there, *Builder* reports an error.
@@ -847,8 +871,8 @@ The final path to the include: "github:someuser/somerepo/folderA/folderB/folderC
 
 If
 
-- the path in the include is a relative path 
-- and the processed file is a local file (or it is a remote file but the `--use-remote-relative-includes` option is not specified) 
+- the path in the include is a relative path
+- and the processed file is a local file (or it is a remote file but the `--use-remote-relative-includes` option is not specified)
 
 then *Builder* makes the following steps to find the include file:
 
