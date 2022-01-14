@@ -58,13 +58,14 @@ const TOKENS = {
   SOURCE_FRAGMENT: 'source_fragment',
   INLINE_EXPRESSION: 'inline_expression',
   WARNING: 'warning',
+  INFO: 'info',
 };
 
 // lines gobbling regex
 const LINES = /(.*(?:\r\n|\n)?)/g;
 
 // regex to detect if fragment is a directive
-const DIRECTIVE = /^\s*@(include|set|if|else|elseif|endif|error|macro|endmacro|end|while|endwhile|repeat|endrepeat|warning)\b(.*?)\s*$/;
+const DIRECTIVE = /^\s*@(include|set|if|else|elseif|endif|error|macro|endmacro|end|while|endwhile|repeat|endrepeat|warning|info)\b(.*?)\s*$/;
 
 // @-style comments regex
 const COMMENT = /^\s*@\s/;
@@ -398,6 +399,15 @@ class AstParser {
         case TOKENS.WARNING:
 
           node.type = INSTRUCTIONS.WARNING;
+          node.value = token.args[0];
+          this._append(parent, node, state);
+
+          break;
+
+        // @info <message:expression>
+        case TOKENS.INFO:
+
+          node.type = INSTRUCTIONS.INFO;
           node.value = token.args[0];
           this._append(parent, node, state);
 
