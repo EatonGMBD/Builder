@@ -197,6 +197,12 @@ class AstParser {
             token.args.push(arg);
             break;
 
+          case 'info':
+            this._checkArgumentIsNonempty(type, arg, token._line);
+            token.type = TOKENS.INFO;
+            token.args.push(arg);
+            break;
+
           case 'macro':
             this._checkArgumentIsNonempty(type, arg, token._line);
             token.type = TOKENS.MACRO;
